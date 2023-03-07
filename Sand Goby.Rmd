@@ -1,0 +1,186 @@
+---
+title: "PCA"
+author: "J Donelson"
+date: "2023-03-03"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(lme4)
+library(MuMIn)
+library(vegan)
+library(emmeans)
+library(dplyr)
+library(lmerTest)
+library(car)
+```
+
+```{r}
+setwd("C:/Users/jc130714/OneDrive - James Cook University/Desktop")
+getwd()
+```
+
+
+
+
+```{r}
+SandGoby = read.csv('Sand Goby Fish.csv', strip.white=TRUE)
+
+```
+
+```{r}
+#standardising as all things were not measured on the same scale 
+
+SandGoby.std = stdize(SandGoby, centre=TRUE, scale = TRUE)
+head(SandGoby.std)
+```
+
+```{r}
+SandGoby.rda = rda(SandGoby.std)
+summary(SandGoby.rda, display=NULL)
+```
+These show that 67% of the variation is explained by PC1 and PC2. 
+```{r}
+screeplot(SandGoby.rda)
+```
+
+```{r}
+SandGoby.sites.score = (scores(SandGoby.rda, display='sites'))
+head(SandGoby.sites.score)
+
+SandGoby.species.score = as.data.frame(scores(SandGoby.rda, display='species'))
+SandGoby.species.score
+SandGoby.species.score$Species = rownames(SandGoby.species.score)
+SandGoby.sites.score = data.frame(SandGoby.sites.score, SandGoby.std)
+```
+
+
+#getting and adding groupings 
+```{r}
+SandGobyGroup = read.csv('Goby Benthic.csv')
+head(SandGobyGroup)
+```
+
+```{r}
+SandGoby.sites.score2 = cbind(SandGoby.sites.score, SandGobyGroup)
+head(SandGoby.sites.score2)
+```
+
+```{r}
+SandGoby.sites.score2$Sub.Zone = factor(SandGoby.sites.score2$Sub.Zone)
+
+#making a PCA figure 
+#putting the sites on the graph
+g = ggplot() + geom_point(data=SandGoby.sites.score2, aes(y=PC2, x=PC1, colour = Zone, shape = Zone),  show.legend = TRUE)   + theme_classic()
+
+#adding the arrows
+g = g + geom_segment(data=SandGoby.species.score, aes(y=0, x=0, yend=PC2, xend=PC1), arrow = arrow(length=unit(0.3, 'lines')), show.legend = FALSE)
+hjust = ifelse(SandGoby.species.score$PC1>0,0,1)
+vjust = ifelse(SandGoby.species.score$PC2>0,0,1)
+g = g + geom_text(data=SandGoby.species.score, aes(y=PC2, x=PC1, label = Species))
+
+#now adding cross hairs and axis lines 
+g = g + geom_segment(data=NULL, aes(y=-Inf, x=-0, yend=Inf, xend=0))
+g = g + geom_segment(data=NULL, aes(y=0, x=-Inf, yend=0, xend=Inf))
+
+#ellipses 
+g =  g + stat_ellipse(data=SandGoby.sites.score2, aes(y=PC2, x=PC1,  colour = Zone, fill = Zone), level = 0.67, geom = "polygon", alpha = 0.2)
+g
+
+```
+
+```{r}
+#making a PCA figure 
+#putting the sites on the graph
+g = ggplot() + geom_point(data=SandGoby.sites.score2, aes(y=PC2, x=PC1, colour = Sub.Zone, shape = Sub.Zone),  show.legend = TRUE)   + theme_classic()
+
+#adding the arrows
+g = g + geom_segment(data=SandGoby.species.score, aes(y=0, x=0, yend=PC2, xend=PC1), arrow = arrow(length=unit(0.3, 'lines')), show.legend = FALSE)
+hjust = ifelse(SandGoby.species.score$PC1>0,0,1)
+vjust = ifelse(SandGoby.species.score$PC2>0,0,1)
+g = g + geom_text(data=SandGoby.species.score, aes(y=PC2, x=PC1, label = Species))
+
+#now adding cross hairs and axis lines 
+g = g + geom_segment(data=NULL, aes(y=-Inf, x=-0, yend=Inf, xend=0))
+g = g + geom_segment(data=NULL, aes(y=0, x=-Inf, yend=0, xend=Inf))
+
+#ellipses 
+g =  g + stat_ellipse(data=SandGoby.sites.score2, aes(y=PC2, x=PC1,  colour = Sub.Zone, fill = Sub.Zone), level = 0.67, geom = "polygon", alpha = 0.2)
+g
+```
+
+##NMDS
+
+```{r}
+SandGoby = read.csv('Sand Goby Fish.csv', strip.white=TRUE)
+SandGobyGroup = read.csv('Goby Benthic.csv')
+
+```
+
+```{r}
+nmds_results = metaMDS(comm = SandGoby, distance = "bray", try = 100)    
+```
+
+
+```{r}
+#This is code I found online
+# First create a data frame of the scores from the individual sites.
+# This data frame will contain x and y values for where sites are located.
+data_scores <- as.data.frame(scores(nmds_results))
+
+# Now add the extra column for groupings 
+data_scores <- cbind(data_scores, SandGobyGroup)
+head(data_scores)
+#colnames(data_scores)[3] <- "aquaticSiteType"
+
+# Next, we can add the scores for species data
+species_scores <- as.data.frame(scores(nmds_results, "species"))
+
+
+# Add a column equivalent to the row name to create species labels
+species_scores$species <- rownames(species_scores)
+head(species_scores)
+```
+
+
+```{r}
+
+# Now we can build the plot
+
+g = ggplot() + geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species), alpha = 0.5, size = 5)  +  geom_point(data = data_scores, aes(x = sites.NMDS1, y = sites.NMDS2, color = Zone), size = 3)  + theme_classic()
+
+
+g
+```
+
+```{r}
+
+# Now we can build the plot for Sub Zone
+data_scores$Sub.Zone = factor(data_scores$Sub.Zone)
+
+g = ggplot() + geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species), alpha = 0.5, size = 5)  +  geom_point(data = data_scores, aes(x = sites.NMDS1, y = sites.NMDS2, color = Sub.Zone), size = 3)  + theme_classic()
+
+
+g
+```
+
+
+```{r}
+grp.a <- data_scores[data_scores$Zone == "A", ][chull(data_scores[data_scores$Zone == "A", c("sites.NMDS1", "sites.NMDS2")]), ]  # hull values for grp A
+
+grp.b <- data_scores[data_scores$Zone == "B", ][chull(data_scores[data_scores$Zone == "B", c("sites.NMDS1", "sites.NMDS2")]), ]  # hull values for grp B
+
+hull.data <- rbind(grp.a, grp.b)  #combine grp.a and grp.b
+hull.data
+```
+
+
+```{r}
+g = ggplot() + geom_text(data = species_scores, aes(x = NMDS1, y = NMDS2, label = species), alpha = 0.5, size = 5)  +  geom_point(data = data_scores, aes(x = sites.NMDS1, y = sites.NMDS2, color = Zone), size = 3) +  geom_polygon(data=hull.data, aes(x=sites.NMDS1,y=sites.NMDS2, fill=Zone,group=Zone), alpha=0.30)  + theme_classic()
+
+
+g
+```
+
+
